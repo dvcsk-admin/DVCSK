@@ -145,8 +145,8 @@
         </div>
     </main>
 <script>
-        // Biztonságos és teljesen ingyenes nyílt hálózati csatorna
-        const channelId = "dvcsk_szolgalat_nyilt_v3";
+        // Teljesen ingyenes, stabil és nyílt felhőhálózati csatorna csere kulcsok nélkül
+        const channelId = "dvcsk_szolgalat_vegleges_v4";
         const listenUrl = `https://esv.ooo{channelId}`;
         const sendUrl = `https://esv.ooo{channelId}`;
 
@@ -165,7 +165,6 @@
             usersDatabase['jaror' + i] = { role: 'patrol', name: 'DVCSK Járőr ' + i };
         }
 
-        // Hálózati figyelő elindítása a háttérben
         function startNetworkListener() {
             if (liveSource) liveSource.close();
             liveSource = new EventSource(listenUrl);
@@ -244,7 +243,7 @@
             }
         }
 
-        async function startDuty() {
+        function startDuty() {
             resetPatrolUI(true);
             sendNetworkStatus('active', null, null);
             sendNetworkLog("Szolgálat elindítva", "A járőr megkezdte a szolgálatot.");
@@ -318,7 +317,6 @@
         }
 
         function refreshAdminData() {
-            // 1. Járőrök listája és térkép kezelése
             const patrolListDiv = document.getElementById('patrol-list');
             patrolListDiv.innerHTML = "";
             let activeCount = 0;
@@ -348,7 +346,6 @@
             }
             document.getElementById('active-count').innerText = `${activeCount} aktív`;
 
-            // 2. Táblázat kezelése
             const tableBody = document.getElementById('log-table-body');
             tableBody.innerHTML = "";
             logsList.slice(0, 15).forEach(log => {
