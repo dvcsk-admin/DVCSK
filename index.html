@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+
+       <!DOCTYPE html>
 <html lang="hu">
 <head>
     <meta charset="UTF-8">
@@ -6,6 +7,8 @@
     <title>DVCSK Kerékpáros Szolgálat</title>
     <link rel="stylesheet" href="https://unpkg.com" />
     <script src="https://unpkg.com"></script>
+    <!-- A legstabilabb MQTT hálózati motor beágyazása -->
+    <script src="https://cloudflare.com"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; color: #374151; }
         .hidden { display: none !important; }
@@ -110,7 +113,7 @@
                 <div class="stat-box">
                     <div>
                         <span style="font-size: 12px; color: #9ca3af; font-weight: bold; text-transform: uppercase;">Adatkapcsolat</span>
-                        <h3 style="margin: 5px 0 0 0; font-size: 24px; color: #9333ea;">Globális Műholdas</h3>
+                        <h3 style="margin: 5px 0 0 0; font-size: 24px; color: #9333ea;">HiveMQ Ultrastabil</h3>
                     </div>
                 </div>
             </div>
@@ -145,10 +148,9 @@
         </div>
     </main>
  <script>
-        // Új, stabil, CORS-mentes felhőhálózati csatorna (Nchan technológia)
-        const channelId = "dvcsk_szolgalat_stabil_v5";
-        const listenUrl = `https://esv.ooo{channelId}`;
-        const sendUrl = `https://esv.ooo{channelId}`;
+        // Ultrastabil, nemzetközi MQTT felhő csatorna (HiveMQ Nyílt Broker)
+        const mqttTopic = "dvcsk/szolgalat/global/v6";
+        let mqttClient = null;
 
         let currentUser = null;
         let watchId = null;
@@ -156,7 +158,6 @@
         let markers = {};
         let activePatrols = {};
         let logsList = [];
-        let liveSource = null;
 
         const usersDatabase = {
             'admin': { role: 'admin', name: 'Központi Felügyelő' }
@@ -166,11 +167,17 @@
         }
 
         function startNetworkListener() {
-            if (liveSource) liveSource.close();
-            liveSource = new EventSource(listenUrl);
-            liveSource.onmessage = function(event) {
+            // Csatlakozás a világ legmegbízhatóbb nyílt hálózatához titkosított WebSocketen keresztül
+            mqttClient = mqtt.connect("wss://://hivemq.com");
+
+            mqttClient.on('connect', () => {
+                mqttClient.subscribe(mqttTopic);
+            });
+
+            mqttClient.on('message', (topic, message) => {
                 try {
-                    const data = JSON.parse(event.data);
+                    const data = JSON.parse(message.toString());
+                    
                     if (data.type === 'status_update') {
                         activePatrols[data.userId] = data;
                         if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminData();
@@ -183,7 +190,7 @@
                         if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminData();
                     }
                 } catch(e) {}
-            };
+            });
         }
 
         function login() {
@@ -212,8 +219,8 @@
 
         function logout() {
             if (watchId) navigator.geolocation.clearWatch(watchId);
-            if (liveSource) liveSource.close();
             stopDuty();
+            if (mqttClient) mqttClient.end();
             document.getElementById('patrol-page').classList.add('hidden');
             document.getElementById('admin-page').classList.add('hidden');
             document.getElementById('main-nav').classList.add('hidden');
@@ -280,36 +287,29 @@ function resetPatrolUI(isActive) {
         }
 
         function sendNetworkStatus(status, lat, lng) {
-            if (!currentUser) return;
-            fetch(sendUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'status_update',
-                    userId: currentUser,
-                    name: usersDatabase[currentUser].name,
-                    status: status,
-                    lat: lat,
-                    lng: lng,
-                    lastSeen: new Date().toLocaleTimeString('hu-HU')
-                })
-            });
+            if (!currentUser || !mqttClient || !mqttClient.connected) return;
+            const payload = {
+                type: 'status_update',
+                userId: currentUser,
+                name: usersDatabase[currentUser].name,
+                status: status,
+                lat: lat,
+                lng: lng,
+                lastSeen: new Date().toLocaleTimeString('hu-HU')
+            };
+            mqttClient.publish(mqttTopic, JSON.stringify(payload));
         }
 
         function sendNetworkLog(type, desc) {
-            fetch(sendUrl, {
-                method: 'POST',
-                mode: 'no-cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    type: 'log_entry',
-                    time: new Date().toLocaleTimeString('hu-HU'),
-                    user: usersDatabase[currentUser] ? usersDatabase[currentUser].name : "Ismeretlen",
-                    logType: type,
-                    desc: desc
-                })
-            });
+            if (!mqttClient || !mqttClient.connected) return;
+            const payload = {
+                type: 'log_entry',
+                time: new Date().toLocaleTimeString('hu-HU'),
+                user: usersDatabase[currentUser] ? usersDatabase[currentUser].name : "Ismeretlen",
+                logType: type,
+                desc: desc
+            };
+            mqttClient.publish(mqttTopic, JSON.stringify(payload));
         }
 
         function initAdminDashboard() {
@@ -361,11 +361,11 @@ function resetPatrolUI(isActive) {
 
         function clearLogs() {
             if(confirm("Törlöd a teljes felhő naplót?")) {
-                fetch(sendUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ type: 'clear_logs' }) });
+                if (mqttClient && mqttClient.connected) {
+                    mqttClient.publish(mqttTopic, JSON.stringify({ type: 'clear_logs' }));
+                }
             }
         }
     </script>
 </body>
 </html>
-
-      
