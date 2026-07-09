@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DVCSK Kerékpáros Szolgálat</title>
+    <script src="https://tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <script src="https://unpkg.com"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans min-h-screen flex flex-col">
+
+    <nav id="main-nav" class="hidden bg-blue-600 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <span class="font-bold text-lg">DVCSK Központ</span>
+            <div class="flex items-center space-x-4">
+                <span id="nav-user-name" class="font-semibold text-sm hidden sm:inline"></span>
+                <button onclick="logout()" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg text-sm transition">🚪 Kijelentkezés</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-1 flex flex-col justify-center items-center p-4 w-full">
+
+        <div id="login-page" class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md">
+            <h1 class="text-2xl font-extrabold text-center text-gray-950 mb-6">DVCSK Szolgálat</h1>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Felhasználónév</label>
+                    <input type="text" id="username" class="w-full p-3 border rounded-xl outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase mb-1">Jelszó</label>
+                    <input type="password" id="password" class="w-full p-3 border rounded-xl outline-none" value="123456">
+                </div>
+                <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition">Bejelentkezés →</button>
+                <div class="text-xs text-gray-500 text-center pt-2">Belépés: admin vagy jaror1 ... jaror15 (Jelszó: 123456)</div>
+            </div>
+        </div>
+
+        <div id="patrol-page" class="hidden w-full max-w-lg space-y-4">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border">
+                <h2 class="font-bold text-xl">Járőrszolgálat Állapota</h2>
+                <p id="patrol-status-text" class="text-sm text-red-500 font-semibold mt-1">● Szolgálaton kívül</p>
+            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
+                <div class="grid grid-cols-2 gap-3">
+                    <button id="btn-start" onclick="startDuty()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl shadow">▶ Indítás</button>
+                    <button id="btn-stop" onclick="stopDuty()" class="bg-gray-200 text-gray-400 font-bold py-4 rounded-xl" disabled>■ Leadás</button>
+                </div>
+                <div id="gps-status" class="bg-gray-50 text-xs text-gray-500 p-2.5 rounded-lg text-center font-mono">GPS: Inaktív</div>
+            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-4">
+                <h3 class="font-bold text-sm uppercase text-gray-400">🚨 Esemény bejelentése</h3>
+                <select id="report-type" class="w-full p-3 border rounded-xl bg-gray-50 text-sm">
+                    <option value="Általános észlelés">ℹ️ Általános észlelés</option>
+                    <option value="Kerékpár hiba (Defekt)">🔧 Kerékpár hiba (Defekt)</option>
+                    <option value="Kerékpár hiba (Lánc/Váltó)">⚙️ Kerékpár hiba (Lánc/Váltó)</option>
+                    <option value="Baleset / Segítségnyújtás">⚠️ Baleset / Segítségnyújtás</option>
+                </select>
+                <textarea id="report-desc" rows="3" class="w-full p-3 border rounded-xl bg-gray-50 text-sm outline-none" placeholder="Mi történt? Pontos helyszín..."></textarea>
+                <button onclick="sendReport()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow">Jelentés elküldése</button>
+            </div>
+        </div>
+
+        <div id="admin-page" class="hidden w-full max-w-7xl space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center">
+                    <span class="text-gray-500 font-bold uppercase text-xs">Aktív Állomány</span>
+                    <h3 id="active-count" class="text-xl font-black text-green-600">0 aktív</h3>
+                </div>
+                <div class="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center">
+                    <span class="text-gray-500 font-bold uppercase text-xs">Adatkapcsolat</span>
+                    <h3 class="text-xl font-black text-purple-600">Műholdas Élő Kapcsolat</h3>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div class="bg-white p-5 rounded-2xl shadow-sm border flex flex-col h-[450px]">
+                    <h3 class="font-bold text-sm uppercase text-gray-400 mb-3">👥 Járőrök állapota</h3>
+                    <div id="patrol-list" class="space-y-2 overflow-y-auto flex-1"></div>
+                </div>
+                <div class="bg-white p-5 rounded-2xl shadow-sm border flex flex-col h-[450px] lg:col-span-2">
+                    <h3 class="font-bold text-sm uppercase text-gray-400 mb-3">📍 Élő Térkép</h3>
+                    <div id="map" class="w-full h-full rounded-xl border z-0"></div>
+                </div>
+            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border space-y-3">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-sm uppercase text-gray-400">🚨 Beérkezett Riasztások és Naplók</h3>
+                    <button onclick="clearLogs()" class="text-xs bg-red-50 text-red-600 px-3 py-1.5 rounded-lg font-semibold">Törlés</button>
+                </div>
+                <div id="log-list-container" class="space-y-2 max-h-[300px] overflow-y-auto"></div>
+            </div>
+        </div>
+
+    </main>
+    <script>
+        // Teljesen ingyenes, kulcs nélküli, nyílt hálózati csatorna
+        const channelId = "dvcsk_szolgalat_global_v2";
+        const listenUrl = `https://esv.ooo{channelId}`;
+        const sendUrl = `https://esv.ooo{channelId}`;
+
+        let currentUser = null;
+        let watchId = null;
+        let map = null;
+        let markers = {};
+        let activePatrols = {};
+        let logsList = [];
+
+        // Felhasználói adatbázis (1 admin és 15 járőr)
+        const usersDatabase = { 'admin': { role: 'admin', name: 'Központi Felügyelő' } };
+        for(let i=1; i<=15; i++) { usersDatabase['jaror' + i] = { role: 'patrol', name: 'DVCSK Járőr ' + i }; }
+
+        // Élő, valós idejű hálózati kapcsolat indítása (Azonnal fut)
+        const eventSource = new EventSource(listenUrl);
+        eventSource.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'status_update') {
+                    activePatrols[data.userId] = data;
+                    if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminUI();
+                } else if (data.type === 'log_entry') {
+                    logsList.unshift(data);
+                    if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminLogs();
+                } else if (data.type === 'clear_logs') {
+                    logsList = [];
+                    if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminLogs();
+                }
+            } catch(e) {}
+        };
+
+        function login() {
+            const userIn = document.getElementById('username').value.trim().toLowerCase();
+            const passIn = document.getElementById('password').value;
+            if (usersDatabase[userIn] && passIn === "123456") {
+                currentUser = userIn;
+                document.getElementById('login-page').classList.add('hidden');
+                document.getElementById('main-nav').classList.remove('hidden');
+                document.getElementById('nav-user-name').innerText = usersDatabase[userIn].name;
+                if (usersDatabase[userIn].role === 'admin') {
+                    document.getElementById('admin-page').classList.remove('hidden');
+                    initAdminDashboard();
+                } else {
+                    document.getElementById('patrol-page').classList.remove('hidden');
+                    resetPatrolUI(activePatrols[currentUser] && activePatrols[currentUser].status === 'active');
+                }
+            } else {
+                alert('Hibás felhasználónév vagy jelszó!');
+            }
+        }
+
+        function logout() {
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            stopDuty();
+            document.getElementById('patrol-page').classList.add('hidden');
+            document.getElementById('admin-page').classList.add('hidden');
+            document.getElementById('main-nav').classList.add('hidden');
+            document.getElementById('login-page').classList.remove('hidden');
+            currentUser = null;
+        }
+
+        function resetPatrolUI(isActive) {
+            const statusText = document.getElementById('patrol-status-text');
+            const btnStart = document.getElementById('btn-start');
+            const btnStop = document.getElementById('btn-stop');
+            if (isActive) {
+                statusText.innerText = "● Szolgálatban (Élő GPS aktív)";
+                statusText.className = "text-sm text-green-600 font-bold mt-1";
+                btnStart.disabled = true;
+                btnStart.className = "bg-gray-200 text-gray-400 font-bold py-4 rounded-xl cursor-not-allowed w-full";
+                btnStop.disabled = false;
+                btnStop.className = "bg-red-500 text-white font-bold py-4 rounded-xl w-full shadow";
+            } else {
+                statusText.innerText = "● Szolgálaton kívül";
+                statusText.className = "text-sm text-red-500 font-semibold mt-1";
+                btnStart.disabled = false;
+                btnStart.className = "bg-green-600 text-white font-bold py-4 rounded-xl w-full shadow";
+                btnStop.disabled = true;
+                btnStop.className = "bg-gray-200 text-gray-400 font-bold py-4 rounded-xl cursor-not-allowed w-full";
+                document.getElementById('gps-status').innerText = "GPS: Inaktív";
+            }
+        }
+
+        function startDuty() {
+            resetPatrolUI(true);
+            sendNetworkStatus('active', null, null);
+            sendNetworkLog("Szolgálat elindítva", "A járőr megkezdte a szolgálatot.");
+            if (navigator.geolocation) {
+                document.getElementById('gps-status').innerText = "📡 GPS kapcsolat keresése...";
+                watchId = navigator.geolocation.watchPosition(
+                    (position) => {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        sendNetworkStatus('active', lat, lng);
+                        document.getElementById('gps-status').innerText = `🎯 Élő GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+                    },
+                    (error) => { document.getElementById('gps-status').innerText = "❌ Kapcsold be a GPS-t!"; },
+                    { enableHighAccuracy: true, maximumAge: 4000 }
+                );
+            }
+        }
+
+        function stopDuty() {
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            resetPatrolUI(false);
+            sendNetworkStatus('offline', null, null);
+            sendNetworkLog("Szolgálat befejezve", "A járőr leadta a szolgálatot.");
+        }
+
+        function sendReport() {
+            const type = document.getElementById('report-type').value;
+            const desc = document.getElementById('report-desc').value.trim();
+            if(!desc) return alert("Kérlek írd le a részleteket!");
+            sendNetworkLog(type, desc);
+            document.getElementById('report-desc').value = "";
+            alert("Jelentés elküldve!");
+        }
+
+        function sendNetworkStatus(status, lat, lng) {
+            fetch(sendUrl, {
+                method: 'POST',
+                body: JSON.stringify({
+                    type: 'status_update', userId: currentUser, name: usersDatabase[currentUser].name,
+                    status: status, lat: lat, lng: lng, lastSeen: new Date().toLocaleTimeString('hu-HU')
+                })
+            });
+        }
+
+        function sendNetworkLog(type, desc) {
+            fetch(sendUrl, {
+                method: 'POST',
+                body: JSON.stringify({
+                    type: 'log_entry', time: new Date().toLocaleTimeString('hu-HU'),
+                    user: usersDatabase[currentUser].name, logType: type, desc: desc
+                })
+            });
+        }
+
+        function initAdminDashboard() {
+            if(!map) {
+                map = L.map('map').setView([47.778, 19.129], 13);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            }
+            refreshAdminUI();
+            refreshAdminLogs();
+        }
+
+        function refreshAdminUI() {
+            const patrolListDiv = document.getElementById('patrol-list');
+            patrolListDiv.innerHTML = "";
+            let activeCount = 0;
+
+            for (let i = 1; i <= 15; i++) {
+                const key = 'jaror' + i;
+                const pData = activePatrols[key] || { name: 'DVCSK Járőr ' + i, status: 'offline', lastSeen: '-' };
+                const isActive = pData.status === 'active';
+                if(isActive) activeCount++;
+
+                const card = document.createElement('div');
+                card.className = `p-3.5 rounded-xl border flex justify-between items-center mb-2 ${isActive ? 'bg-green-50 border-green-200' : 'bg-gray-50 opacity-60'}`;
+                card.innerHTML = `<div><p class="font-bold text-sm text-gray-900">${pData.name}</p><p class="text-xs text-gray-500">Idő: ${pData.lastSeen}</p></div><span class="h-2 w-2 rounded-full ${isActive ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}"></span>`;
+                patrolListDiv.appendChild(card);
+
+                if (isActive && pData.lat && pData.lng) {
+                    if (markers[key]) {
+                        markers[key].setLatLng([pData.lat, pData.lng]);
+                    } else {
+                        markers[key] = L.marker([pData.lat, pData.lng]).addTo(map).bindPopup(pData.name);
+                    }
+                } else if (markers[key]) {
+                    map.removeLayer(markers[key]);
+                    delete markers[key];
+                }
+            }
+            document.getElementById('active-count').innerText = `${activeCount} aktív`;
+        }
+
+        function refreshAdminLogs() {
+            const container = document.getElementById('log-list-container');
+            container.innerHTML = "";
+            logsList.slice(0, 15).forEach(log => {
+                const box = document.createElement('div');
+                box.className = "p-3 bg-gray-50 border rounded-xl text-xs space-y-1";
+                box.innerHTML = `<div class="flex justify-between font-bold text-gray-700"><span>${log.time} - ${log.user}</span><span class="text-blue-600">${log.logType}</span></div><p class="text-gray-600">${log.desc}</p>`;
+                container.appendChild(box);
+            });
+        }
+
+        function clearLogs() {
+            if(confirm("Törlöd a teljes naplót?")) {
+                fetch(sendUrl, { method: 'POST', body: JSON.stringify({ type: 'clear_logs' }) });
+            }
+        }
+    </script>
+</body>
+</html>
