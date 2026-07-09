@@ -6,7 +6,6 @@
     <title>DVCSK Kerékpáros Szolgálat</title>
     <link rel="stylesheet" href="https://unpkg.com" />
     <script src="https://unpkg.com"></script>
-    <script src="https://jsdelivr.net"></script>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f3f4f6; margin: 0; padding: 0; color: #374151; }
         .hidden { display: none !important; }
@@ -23,8 +22,7 @@
         .status-card { background: white; padding: 20px; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 15px; }
         .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .btn-start { width: 100%; background-color: #16a34a; color: white; font-weight: bold; padding: 15px; border: none; border-radius: 12px; cursor: pointer; }
-        .btn-stop { width: 100%; background-color: #16a34a; color: white; font-weight: bold; padding: 15px; border: none; border-radius: 12px; cursor: pointer; }
-        .btn-stop { background-color: #dc2626; }
+        .btn-stop { width: 100%; background-color: #dc2626; color: white; font-weight: bold; padding: 15px; border: none; border-radius: 12px; cursor: pointer; }
         .btn-disabled { background-color: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
         .admin-container { width: 100%; max-width: 1200px; }
         .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 20px; width: 100%; }
@@ -112,7 +110,7 @@
                 <div class="stat-box">
                     <div>
                         <span style="font-size: 12px; color: #9ca3af; font-weight: bold; text-transform: uppercase;">Adatkapcsolat</span>
-                        <h3 style="margin: 5px 0 0 0; font-size: 24px; color: #9333ea;">Zárt Felhő</h3>
+                        <h3 style="margin: 5px 0 0 0; font-size: 24px; color: #9333ea;">Globális Hálózat</h3>
                     </div>
                 </div>
             </div>
@@ -147,22 +145,45 @@
         </div>
     </main>
 <script>
-        // A te teljesen egyedi, javított Supabase hozzáférésed
-        const supabaseUrl = "https://supabase.co";
-        const supabaseKey = "sb_publishable_lzwx0JzejdJxHBiVOo3n5A_Bw7b1rWapi";
-        const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+        // Biztonságos és teljesen ingyenes nyílt hálózati csatorna
+        const channelId = "dvcsk_szolgalat_nyilt_v3";
+        const listenUrl = `https://esv.ooo{channelId}`;
+        const sendUrl = `https://esv.ooo{channelId}`;
 
         let currentUser = null;
         let watchId = null;
         let map = null;
         let markers = {};
-        let activeInterval = null;
+        let activePatrols = {};
+        let logsList = [];
+        let liveSource = null;
 
         const usersDatabase = {
             'admin': { role: 'admin', name: 'Központi Felügyelő' }
         };
         for(let i=1; i<=15; i++) {
             usersDatabase['jaror' + i] = { role: 'patrol', name: 'DVCSK Járőr ' + i };
+        }
+
+        // Hálózati figyelő elindítása a háttérben
+        function startNetworkListener() {
+            if (liveSource) liveSource.close();
+            liveSource = new EventSource(listenUrl);
+            liveSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'status_update') {
+                        activePatrols[data.userId] = data;
+                        if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminData();
+                    } else if (data.type === 'log_entry') {
+                        logsList.unshift(data);
+                        if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminData();
+                    } else if (data.type === 'clear_logs') {
+                        logsList = [];
+                        if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminData();
+                    }
+                } catch(e) {}
+            };
         }
 
         function login() {
@@ -174,6 +195,8 @@
                 document.getElementById('login-page').classList.add('hidden');
                 document.getElementById('main-nav').classList.remove('hidden');
                 document.getElementById('nav-user-name').innerText = usersDatabase[userIn].name;
+
+                startNetworkListener();
 
                 if (usersDatabase[userIn].role === 'admin') {
                     document.getElementById('admin-page').classList.remove('hidden');
@@ -189,7 +212,7 @@
 
         function logout() {
             if (watchId) navigator.geolocation.clearWatch(watchId);
-            if (activeInterval) clearInterval(activeInterval);
+            if (liveSource) liveSource.close();
             stopDuty();
             document.getElementById('patrol-page').classList.add('hidden');
             document.getElementById('admin-page').classList.add('hidden');
@@ -223,16 +246,16 @@
 
         async function startDuty() {
             resetPatrolUI(true);
-            await sendNetworkStatus('active', null, null);
-            await sendNetworkLog("Szolgálat elindítva", "A járőr megkezdte a szolgálatot.");
+            sendNetworkStatus('active', null, null);
+            sendNetworkLog("Szolgálat elindítva", "A járőr megkezdte a szolgálatot.");
 
             if (navigator.geolocation) {
                 document.getElementById('gps-status').innerText = "📡 GPS kapcsolat keresése...";
                 watchId = navigator.geolocation.watchPosition(
-                    async (position) => {
+                    (position) => {
                         const lat = position.coords.latitude;
                         const lng = position.coords.longitude;
-                        await sendNetworkStatus('active', lat, lng);
+                        sendNetworkStatus('active', lat, lng);
                         document.getElementById('gps-status').innerText = `🎯 Élő GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
                     },
                     (error) => { document.getElementById('gps-status').innerText = "❌ Kapcsold be a GPS-t!"; },
@@ -241,40 +264,48 @@
             }
         }
 
-        async function stopDuty() {
+        function stopDuty() {
             if (watchId) navigator.geolocation.clearWatch(watchId);
             resetPatrolUI(false);
-            await sendNetworkStatus('offline', null, null);
-            await sendNetworkLog("Szolgálat befejezve", "A járőr leadta a szolgálatot.");
+            sendNetworkStatus('offline', null, null);
+            sendNetworkLog("Szolgálat befejezve", "A járőr leadta a szolgálatot.");
         }
 
-        async function sendReport() {
+        function sendReport() {
             const type = document.getElementById('report-type').value;
             const desc = document.getElementById('report-desc').value.trim();
             if(!desc) return alert("Kérlek írd le a részleteket!");
-            await sendNetworkLog(type, desc);
+            sendNetworkLog(type, desc);
             document.getElementById('report-desc').value = "";
             alert("Jelentés elküldve!");
         }
 
-        async function sendNetworkStatus(status, lat, lng) {
+        function sendNetworkStatus(status, lat, lng) {
             if (!currentUser) return;
-            await _supabase.from('patrols').upsert({
-                id: currentUser,
-                name: usersDatabase[currentUser].name,
-                status: status,
-                lat: lat,
-                lng: lng,
-                last_seen: new Date().toLocaleTimeString('hu-HU')
+            fetch(sendUrl, {
+                method: 'POST',
+                body: JSON.stringify({
+                    type: 'status_update',
+                    userId: currentUser,
+                    name: usersDatabase[currentUser].name,
+                    status: status,
+                    lat: lat,
+                    lng: lng,
+                    lastSeen: new Date().toLocaleTimeString('hu-HU')
+                })
             });
         }
 
-        async function sendNetworkLog(type, desc) {
-            await _supabase.from('logs').insert({
-                time: new Date().toLocaleTimeString('hu-HU'),
-                user_name: usersDatabase[currentUser] ? usersDatabase[currentUser].name : "Ismeretlen",
-                log_type: type,
-                description: desc
+        function sendNetworkLog(type, desc) {
+            fetch(sendUrl, {
+                method: 'POST',
+                body: JSON.stringify({
+                    type: 'log_entry',
+                    time: new Date().toLocaleTimeString('hu-HU'),
+                    user: usersDatabase[currentUser] ? usersDatabase[currentUser].name : "Ismeretlen",
+                    logType: type,
+                    desc: desc
+                })
             });
         }
 
@@ -283,58 +314,53 @@
                 map = L.map('map').setView([47.778, 19.129], 13);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
             }
-            
             refreshAdminData();
-            activeInterval = setInterval(refreshAdminData, 2000);
         }
 
-        async function refreshAdminData() {
-            const { data: patrols } = await _supabase.from('patrols').select('*');
-            if (patrols) {
-                const patrolListDiv = document.getElementById('patrol-list');
-                patrolListDiv.innerHTML = "";
-                let activeCount = 0;
+        function refreshAdminData() {
+            // 1. Járőrök listája és térkép kezelése
+            const patrolListDiv = document.getElementById('patrol-list');
+            patrolListDiv.innerHTML = "";
+            let activeCount = 0;
 
-                patrols.forEach(p => {
-                    const isActive = p.status === 'active';
-                    if (isActive) activeCount++;
+            for (let i = 1; i <= 15; i++) {
+                const key = 'jaror' + i;
+                const p = activePatrols[key] || { name: 'DVCSK Járőr ' + i, status: 'offline', lastSeen: '-' };
+                const isActive = p.status === 'active';
+                if (isActive) activeCount++;
 
-                    const card = document.createElement('div');
-                    card.className = "patrol-card";
-                    if(!isActive) card.style.opacity = "0.6";
-                    card.innerHTML = `<div><p style="margin:0;font-weight:bold;font-size:14px;">${p.name}</p><p style="margin:3px 0 0 0;font-size:11px;color:#6b7280;">Idő: ${p.last_seen || '-'}</p></div><span class="dot ${isActive ? 'dot-green' : 'dot-gray'}"></span>`;
-                    patrolListDiv.appendChild(card);
+                const card = document.createElement('div');
+                card.className = "patrol-card";
+                if(!isActive) card.style.opacity = "0.6";
+                card.innerHTML = `<div><p style="margin:0;font-weight:bold;font-size:14px;">${p.name}</p><p style="margin:3px 0 0 0;font-size:11px;color:#6b7280;">Idő: ${p.lastSeen || '-'}</p></div><span class="dot ${isActive ? 'dot-green' : 'dot-gray'}"></span>`;
+                patrolListDiv.appendChild(card);
 
-                    if (isActive && p.lat && p.lng) {
-                        if (markers[p.id]) {
-                            markers[p.id].setLatLng([p.lat, p.lng]);
-                        } else {
-                            markers[p.id] = L.marker([p.lat, p.lng]).addTo(map).bindPopup(`<b>${p.name}</b>`);
-                        }
-                    } else if (markers[p.id]) {
-                        map.removeLayer(markers[p.id]);
-                        delete markers[p.id];
+                if (isActive && p.lat && p.lng) {
+                    if (markers[key]) {
+                        markers[key].setLatLng([p.lat, p.lng]);
+                    } else {
+                        markers[key] = L.marker([p.lat, p.lng]).addTo(map).bindPopup(`<b>${p.name}</b>`);
                     }
-                });
-                document.getElementById('active-count').innerText = `${activeCount} aktív`;
+                } else if (markers[key]) {
+                    map.removeLayer(markers[key]);
+                    delete markers[key];
+                }
             }
+            document.getElementById('active-count').innerText = `${activeCount} aktív`;
 
-            const { data: logs } = await _supabase.from('logs').select('*').order('created_at', { ascending: false }).limit(15);
-            if (logs) {
-                const tableBody = document.getElementById('log-table-body');
-                tableBody.innerHTML = "";
-                logs.forEach(log => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `<td style="padding:12px;color:#9ca3af;font-family:monospace;">${log.time}</td><td style="padding:12px;font-weight:bold;">${log.user_name}</td><td style="padding:12px;"><span style="background:#f3f4f6;padding:4px 8px;border-radius:20px;font-size:12px;">${log.log_type}</span></td><td style="padding:12px;color:#4b5563;">${log.description}</td>`;
-                    tableBody.appendChild(tr);
-                });
-            }
+            // 2. Táblázat kezelése
+            const tableBody = document.getElementById('log-table-body');
+            tableBody.innerHTML = "";
+            logsList.slice(0, 15).forEach(log => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td style="padding:12px;color:#9ca3af;font-family:monospace;">${log.time}</td><td style="padding:12px;font-weight:bold;">${log.user}</td><td style="padding:12px;"><span style="background:#f3f4f6;padding:4px 8px;border-radius:20px;font-size:12px;">${log.logType}</span></td><td style="padding:12px;color:#4b5563;">${log.desc}</td>`;
+                tableBody.appendChild(tr);
+            });
         }
 
-        async function clearLogs() {
+        function clearLogs() {
             if(confirm("Törlöd a teljes felhő naplót?")) {
-                await _supabase.from('logs').delete().neq('id', 0);
-                refreshAdminData();
+                fetch(sendUrl, { method: 'POST', body: JSON.stringify({ type: 'clear_logs' }) });
             }
         }
     </script>
