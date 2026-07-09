@@ -110,7 +110,7 @@
                 <div class="stat-box">
                     <div>
                         <span style="font-size: 12px; color: #9ca3af; font-weight: bold; text-transform: uppercase;">Adatkapcsolat</span>
-                        <h3 style="margin: 5px 0 0 0; font-size: 24px; color: #9333ea;">Globális Hálózat</h3>
+                        <h3 style="margin: 5px 0 0 0; font-size: 24px; color: #9333ea;">Globális Műholdas</h3>
                     </div>
                 </div>
             </div>
@@ -144,9 +144,9 @@
             </div>
         </div>
     </main>
-<script>
-        // Teljesen ingyenes, stabil és nyílt felhőhálózati csatorna csere kulcsok nélkül
-        const channelId = "dvcsk_szolgalat_vegleges_v4";
+ <script>
+        // Új, stabil, CORS-mentes felhőhálózati csatorna (Nchan technológia)
+        const channelId = "dvcsk_szolgalat_stabil_v5";
         const listenUrl = `https://esv.ooo{channelId}`;
         const sendUrl = `https://esv.ooo{channelId}`;
 
@@ -179,6 +179,7 @@
                         if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminData();
                     } else if (data.type === 'clear_logs') {
                         logsList = [];
+                        activePatrols = {};
                         if (currentUser && usersDatabase[currentUser].role === 'admin') refreshAdminData();
                     }
                 } catch(e) {}
@@ -219,8 +220,7 @@
             document.getElementById('login-page').classList.remove('hidden');
             currentUser = null;
         }
-
-        function resetPatrolUI(isActive) {
+function resetPatrolUI(isActive) {
             const statusText = document.getElementById('patrol-status-text');
             const btnStart = document.getElementById('btn-start');
             const btnStop = document.getElementById('btn-stop');
@@ -283,6 +283,8 @@
             if (!currentUser) return;
             fetch(sendUrl, {
                 method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     type: 'status_update',
                     userId: currentUser,
@@ -298,6 +300,8 @@
         function sendNetworkLog(type, desc) {
             fetch(sendUrl, {
                 method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     type: 'log_entry',
                     time: new Date().toLocaleTimeString('hu-HU'),
@@ -357,9 +361,11 @@
 
         function clearLogs() {
             if(confirm("Törlöd a teljes felhő naplót?")) {
-                fetch(sendUrl, { method: 'POST', body: JSON.stringify({ type: 'clear_logs' }) });
+                fetch(sendUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ type: 'clear_logs' }) });
             }
         }
     </script>
 </body>
 </html>
+
+      
